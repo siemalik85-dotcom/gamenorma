@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Class of Champions: Norma Challenge</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&display=swap');
+        
+        body {
+            font-family: 'Montserrat', sans-serif;
+            background-color: #0f172a;
+            color: white;
+            overflow-x: hidden;
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.4); }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in { animation: fadeIn 0.5s ease-out forwards; }
+        
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 15px rgba(52, 211, 153, 0.5); }
+            50% { box-shadow: 0 0 30px rgba(52, 211, 153, 0.9); transform: scale(1.02); }
+        }
+        .btn-pulse { animation: pulse-glow 2s infinite; }
+    </style>
+</head>
+<body>
+    <div id="root" class="w-full h-full"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        const GAME_STATES = {
+            WELCOME: 'WELCOME',
+            RULES: 'RULES',
+            ROUND_INTRO: 'ROUND_INTRO',
+            QUESTION: 'QUESTION',
+            INTERMEZZO: 'INTERMEZZO',
+            BONUS: 'BONUS',
+            SCOREBOARD: 'SCOREBOARD',
+            FINAL_BOARD: 'FINAL_BOARD',
+            CEREMONY: 'CEREMONY'
+        };
+
+        const BADGES = {
+            NORMA_MASTER: { icon: '🏅', name: 'Norma Master' },
+            GUARDIAN: { icon: '🛡️', name: 'Norma Guardian' },
+            DETECTIVE: { icon: '🕵️', name: 'Norma Detective' },
+            QUICK_THINKER: { icon: '⚡', name: 'Quick Thinker' },
+            GOOD_CITIZEN: { icon: '🤝', name: 'Good Citizen' },
+            CHALLENGE_MASTER: { icon: '🔥', name: 'Challenge Master' }
+        };
+
+        const INITIAL_TEAMS = [
+            { id: 'T1', name: 'TIM 1', color: 'bg-blue-600', text: 'text-blue-400', icon: '🔵', score: 0, badges: [], powerUp: 'SHIELD', puUsed: false },
+            { id: 'T2', name: 'TIM 2', color: 'bg-green-600', text: 'text-green-400', icon: '🟢', score: 0, badges: [], powerUp: '2X POINT', puUsed: false },
+            { id: 'T3', name: 'TIM 3', color: 'bg-yellow-500', text: 'text-yellow-400', icon: '🟡', score: 0, badges: [], powerUp: 'HINT', puUsed: false },
+            { id: 'T4', name: 'TIM 4', color: 'bg-red-600', text: 'text-red-400', icon: '🔴', score: 0, badges: [], powerUp: 'EXTRA TIME', puUsed: false },
+            { id: 'T5', name: 'TIM 5', color: 'bg-purple-600', text: 'text-purple-400', icon: '🟣', score: 0, badges: [], powerUp: 'SHIELD', puUsed: false }
+        ];
+
+        const ROUNDS = [
+            { id: 'R1', title: 'RONDE 1: QUICK FIRE', desc: 'Jawab dengan cepat dan tepat!', points: 10, time: 20 },
+            { id: 'R2', title: 'RONDE 2: NORMA ATAU BUKAN?', desc: 'Tentukan apakah ini penerapan norma!', points: 20, time: 20 },
+            { id: 'R3', title: 'RONDE 3: NORMA DETECTIVE', desc: 'Analisis kasus dan temukan jawabannya!', points: 30, time: 30 },
+            { id: 'R4', title: 'RONDE 4: WHAT WOULD YOU DO?', desc: 'Pilih tindakan terbaik di kehidupan nyata!', points: 40, time: 30 },
+            { id: 'R5', title: 'FINAL BATTLE: THE CHAMPION', desc: 'Tantangan tersulit untuk menjadi juara!', points: 50, time: 45 }
+        ];
+
+        const QUESTIONS = {
+            R1: [
+                { q: "Apa yang dimaksud dengan norma?", options: ["Keinginan seseorang untuk mendapat sesuatu", "Aturan/pedoman yang mengatur perilaku manusia", "Kegiatan bermain bersama teman", "Kebiasaan membeli barang"], a: 1, exp: "Norma adalah aturan atau pedoman yang membantu kita bertindak dengan baik dan tertib." },
+                { q: "Salah satu fungsi utama norma dalam masyarakat adalah...", options: ["Membuat orang bebas melakukan apa saja", "Menciptakan kekacauan", "Menciptakan ketertiban dan kedamaian", "Menghukum orang tanpa alasan"], a: 2, exp: "Norma berfungsi mengatur perilaku agar tercipta lingkungan yang tertib, aman, dan damai." },
+                { q: "Norma yang berasal dari hati nurani manusia mengenai baik dan buruk disebut...", options: ["Norma Agama", "Norma Hukum", "Norma Kesopanan", "Norma Kesusilaan"], a: 3, exp: "Norma kesusilaan bersumber dari hati nurani, seperti berkata jujur dan tidak mencuri." },
+                { q: "Norma hukum dibuat oleh...", options: ["Ketua RT", "Kepala Sekolah", "Lembaga resmi negara", "Warga masyarakat"], a: 2, exp: "Norma hukum bersifat tegas dan mengikat, dibuat oleh lembaga resmi negara (seperti pemerintah/DPR)." },
+                { q: "Menghormati orang yang lebih tua adalah contoh dari penerapan norma...", options: ["Kesopanan", "Hukum", "Agama", "Kesusilaan"], a: 0, exp: "Sopan santun dalam bergaul dan menghormati orang tua termasuk norma kesopanan yang berlaku di masyarakat." },
+                { q: "Sanksi atau hukuman bagi pelanggar norma hukum bersifat...", options: ["Teguran saja", "Dosa di akhirat", "Tegas dan memaksa (misal: denda/penjara)", "Dikucilkan teman"], a: 2, exp: "Hukum memiliki aparat (polisi/hakim) sehingga sanksinya bersifat nyata, tegas, dan memaksa." },
+                { q: "Norma yang mengajarkan kita untuk beribadah dan tidak berbohong berasal dari...", options: ["Aturan Sekolah", "Ajaran Tuhan (Agama)", "Peraturan Desa", "UUD 1945"], a: 1, exp: "Norma agama bersumber dari wahyu Tuhan dan kitab suci." },
+                { q: "Siapa yang wajib mematuhi norma di sekolah?", options: ["Hanya murid", "Hanya guru", "Hanya kepala sekolah", "Seluruh warga sekolah"], a: 3, exp: "Aturan sekolah dibuat untuk dipatuhi oleh semua warga sekolah agar proses belajar berjalan lancar." },
+                { q: "Jika kita tidak sengaja berbuat salah, tindakan sesuai norma kesopanan adalah...", options: ["Lari bersembunyi", "Meminta maaf", "Menyalahkan orang lain", "Diam saja"], a: 1, exp: "Meminta maaf adalah tindakan terpuji dan sesuai dengan kebiasaan/norma kesopanan." },
+                { q: "Memakai helm saat naik motor adalah contoh mematuhi norma...", options: ["Kesusilaan", "Hukum", "Agama", "Keluarga"], a: 1, exp: "Aturan lalu lintas dibuat oleh negara dan termasuk dalam norma hukum." }
+            ],
+            R2: [
+                { q: "Rani selalu mengucapkan salam dan mencium tangan ketika masuk ke rumah sepulang sekolah.", options: ["MENERAPKAN NORMA", "TIDAK MENERAPKAN NORMA"], a: 0, exp: "Menghormati orang tua adalah contoh penerapan norma kesopanan dalam keluarga." },
+                { q: "Budi membuang bungkus permennya ke selokan karena tidak melihat tempat sampah.", options: ["MENERAPKAN NORMA", "TIDAK MENERAPKAN NORMA"], a: 1, exp: "Membuang sampah sembarangan merusak lingkungan dan melanggar aturan kebersihan." },
+                { q: "Siska berbicara dengan suara pelan dan lembut saat ibunya sedang tidur siang.", options: ["MENERAPKAN NORMA", "TIDAK MENERAPKAN NORMA"], a: 0, exp: "Siska menunjukkan sikap empati dan menghargai kenyamanan orang lain." },
+                { q: "Tono menyontek jawaban temannya saat ulangan PPKn karena lupa belajar.", options: ["MENERAPKAN NORMA", "TIDAK MENERAPKAN NORMA"], a: 1, exp: "Menyontek adalah perbuatan tidak jujur yang melanggar norma kesusilaan dan aturan sekolah." },
+                { q: "Warga Desa Suka Maju bergotong royong membersihkan jalan desa setiap hari Minggu.", options: ["MENERAPKAN NORMA", "TIDAK MENERAPKAN NORMA"], a: 0, exp: "Gotong royong adalah penerapan norma kebersamaan di lingkungan masyarakat." },
+                { q: "Berbicara dengan suara keras dan membentak saat menasihati adik yang masih kecil.", options: ["MENERAPKAN NORMA", "TIDAK MENERAPKAN NORMA"], a: 1, exp: "Membentak tidak sesuai dengan norma kesopanan dan kasih sayang dalam keluarga." },
+                { q: "Mengantre dengan tertib saat mencuci tangan sebelum masuk kelas.", options: ["MENERAPKAN NORMA", "TIDAK MENERAPKAN NORMA"], a: 0, exp: "Antre adalah bentuk penerapan aturan dan menghargai hak orang lain di sekolah." },
+                { q: "Mengambil mangga tetangga tanpa izin karena pohonnya condong ke jalan.", options: ["MENERAPKAN NORMA", "TIDAK MENERAPKAN NORMA"], a: 1, exp: "Mengambil milik orang lain tanpa izin (mencuri) melanggar norma hukum, kesusilaan, dan agama." },
+                { q: "Menjenguk teman yang sedang sakit dan membawakan buah tangan.", options: ["MENERAPKAN NORMA", "TIDAK MENERAPKAN NORMA"], a: 0, exp: "Menjenguk orang sakit adalah wujud kepedulian sosial yang diajarkan norma." },
+                { q: "Memotong pembicaraan guru saat sedang menjelaskan materi di depan kelas.", options: ["MENERAPKAN NORMA", "TIDAK MENERAPKAN NORMA"], a: 1, exp: "Tindakan tersebut tidak sopan dan melanggar etika belajar di sekolah." }
+            ],
+            R3: [
+                { q: "Dika selalu memakai seragam rapi, datang tepat waktu, dan mendengarkan penjelasan guru. Ia menerapkan norma di...", options: ["Keluarga", "Sekolah", "Masyarakat", "Jalan Raya"], a: 1, exp: "Aturan tentang seragam, waktu, dan belajar berada di lingkungan sekolah." },
+                { q: "Pak RT mengajak seluruh warga ronda malam agar kampung aman. Ini adalah contoh norma di...", options: ["Sekolah", "Rumah", "Masyarakat", "Negara"], a: 2, exp: "Ronda malam adalah kegiatan untuk menjaga keamanan lingkungan warga (masyarakat)." },
+                { q: "Setelah bangun tidur, Dina selalu merapikan tempat tidurnya dan membantu ibu. Ini penerapan norma di...", options: ["Sekolah", "Keluarga", "Tempat Bermain", "Pasar"], a: 1, exp: "Membantu orang tua dan menjaga kerapian rumah adalah tanggung jawab di lingkungan keluarga." },
+                { q: "Ayah selalu berhenti ketika lampu lalu lintas berwarna merah. Tindakan ayah mematuhi norma di lingkungan...", options: ["Sekolah", "Keluarga", "Jalan Raya / Publik", "Kantor"], a: 2, exp: "Lalu lintas adalah ruang publik yang diatur oleh norma hukum yang berlaku umum." },
+                { q: "Roni meminjam mainan temannya dan mengembalikannya dengan keadaan baik. Roni menerapkan norma...", options: ["Agama", "Hukum", "Kesopanan dalam Berteman", "Lalu Lintas"], a: 2, exp: "Menjaga barang pinjaman dan bertanggung jawab adalah sikap baik dalam pertemanan." },
+                { q: "Saat ulangan, Budi mengerjakan sendiri dengan jujur tanpa mencontek. Budi mematuhi norma...", options: ["Hukum", "Kesusilaan", "Kesopanan", "Lingkungan"], a: 1, exp: "Kejujuran bersumber dari hati nurani, yang merupakan inti dari norma kesusilaan." },
+                { q: "Keluarga Siti selalu berdoa bersama sebelum dan sesudah makan. Mereka menerapkan norma...", options: ["Agama", "Hukum", "Kesopanan", "Kesusilaan"], a: 0, exp: "Berdoa merupakan perintah yang diajarkan untuk bersyukur kepada Tuhan (Norma Agama)." },
+                { q: "Pengendara motor berhenti di belakang garis zebra cross agar pejalan kaki aman. Ini penerapan norma...", options: ["Kesopanan", "Keluarga", "Hukum / Lalu Lintas", "Kesusilaan"], a: 2, exp: "Aturan fasilitas jalan dibuat oleh negara demi keselamatan bersama." },
+                { q: "Sebelum pergi bermain keluar rumah, Rina selalu mencium tangan ibunya. Rina menerapkan norma di...", options: ["Sekolah", "Masyarakat", "Keluarga", "Negara"], a: 2, exp: "Meminta izin orang tua adalah aturan dasar yang wajib dipatuhi di lingkungan keluarga." },
+                { q: "Warga berkumpul untuk musyawarah memperbaiki selokan desa yang mampet. Ini adalah norma di...", options: ["Sekolah", "Masyarakat", "Keluarga", "Pasar"], a: 1, exp: "Musyawarah warga adalah kegiatan kerukunan di lingkungan masyarakat." }
+            ],
+            R4: [
+                { q: "Kamu melihat temanmu tidak sengaja menjatuhkan pot bunga sekolah hingga pecah. Tindakanmu...", options: ["Menertawakannya", "Memarahinya di depan orang banyak", "Membantu membersihkan dan menemaninya melapor ke guru", "Pura-pura tidak melihat"], a: 2, exp: "Membantu teman yang kesusahan dan berani bertanggung jawab adalah tindakan terpuji." },
+                { q: "Ada anak kelas lain yang menyerobot antreanmu saat di kantin. Apa yang kamu lakukan?", options: ["Mendorongnya agar mundur", "Mengingatkannya dengan sopan bahwa kamu antre lebih dulu", "Menangis dan lari", "Diam saja dan kesal sendiri"], a: 1, exp: "Mengingatkan dengan sopan bisa menyelesaikan masalah tanpa menimbulkan keributan." },
+                { q: "Di jalan, kamu melihat kakek kesulitan menyeberang jalan. Tindakan yang tepat adalah...", options: ["Menonton kakek tersebut", "Membantunya menyeberang jika kondisi aman", "Meninggalkannya karena buru-buru", "Menertawakan kakek tersebut"], a: 1, exp: "Menolong orang yang lebih tua adalah kewajiban sosial dan penerapan norma kepedulian." },
+                { q: "Temanmu berbeda agama denganmu dan sedang menjalankan ibadahnya. Sikapmu sebaiknya...", options: ["Mengganggunya agar cepat selesai", "Menghormati dan tenang agar ibadahnya khusyuk", "Mengejek cara ibadahnya", "Menjauhinya dan tidak mau berteman"], a: 1, exp: "Toleransi antar umat beragama adalah penerapan penting dari norma agama di Indonesia." },
+                { q: "Kamu menemukan dompet berisi uang di halaman sekolah. Tindakan paling tepat adalah...", options: ["Mengambil uangnya untuk jajan", "Menyembunyikan dompetnya", "Menyerahkan dompet itu ke guru/satpam", "Membuangnya ke tempat sampah"], a: 2, exp: "Kejujuran adalah penerapan norma kesusilaan. Kita tidak boleh mengambil barang orang lain." },
+                { q: "Kamu melihat keran air di kamar mandi sekolah masih menyala padahal bak penuh. Tindakanmu...", options: ["Membiarkannya saja", "Mematikannya agar air tidak terbuang", "Memanggil petugas kebersihan", "Bermain air"], a: 1, exp: "Menghemat air dan menjaga fasilitas sekolah adalah tanggung jawab semua warga sekolah." },
+                { q: "Saat sedang serius belajar, teman sebangkumu mengajak ngobrol terus. Tindakanmu...", options: ["Ikut asyik ngobrol", "Marah dan membentaknya keras-keras", "Menolak halus dan mengajaknya fokus belajar", "Tidur saja di meja"], a: 2, exp: "Menolak dengan halus menjaga perasaannya, sekaligus menjaga ketertiban suasana kelas." },
+                { q: "Kamu berlari dan tidak sengaja menyenggol botol minum temanmu hingga bukunya basah.", options: ["Lari bersembunyi", "Pura-pura tidak tahu", "Meminta maaf dan membantu mengeringkan bukunya", "Menyalahkan lantai yang licin"], a: 2, exp: "Berani mengakui kesalahan dan bertanggung jawab adalah karakter anak yang baik." },
+                { q: "Ada tetangga baru yang sedang kesulitan membawa banyak barang pindahan. Tindakanmu...", options: ["Menonton saja dari jauh", "Menawarkan bantuan semampumu", "Menutup pintu rumah", "Mengejeknya karena repot"], a: 1, exp: "Tolong-menolong antar tetangga adalah inti kerukunan di lingkungan masyarakat." },
+                { q: "Kamu menemukan uang Rp 20.000 tergeletak di kelas. Tindakanmu...", options: ["Memakainya jajan", "Menyimpannya diam-diam", "Menyerahkannya kepada wali kelas", "Dibuang ke tong sampah"], a: 2, exp: "Mengembalikan uang temuan adalah wujud kejujuran (norma kesusilaan)." }
+            ],
+            R5: [
+                { q: "Jika di masyarakat tidak ada norma sama sekali, apa yang paling mungkin terjadi?", options: ["Masyarakat menjadi sangat kaya", "Keadaan menjadi kacau (chaos) dan tidak aman", "Semua orang hidup damai", "Pemerintah tidak perlu bekerja"], a: 1, exp: "Tanpa aturan, yang kuat akan menindas yang lemah, dan ketertiban akan hilang." },
+                { q: "Sikap 'Toleransi' paling erat kaitannya dengan penerapan norma...", options: ["Norma Hukum", "Norma Kesopanan", "Norma Agama", "Norma Kebersihan"], a: 2, exp: "Toleransi beragama adalah menghargai perbedaan keyakinan sesuai ajaran norma agama." },
+                { q: "Sanksi dari pelanggaran norma kesusilaan (hati nurani) biasanya berupa...", options: ["Penjara", "Denda uang", "Rasa menyesal, bersalah, dan malu", "Mendapat hadiah"], a: 2, exp: "Pelanggaran terhadap hati nurani (misal: berbohong) akan menghasilkan rasa bersalah dan malu pada diri sendiri." },
+                { q: "Andi melihat temannya mengejek siswa lain yang sepatunya sobek. Tindakan Andi sebaiknya...", options: ["Ikut mengejek", "Menertawakan dari jauh", "Mengingatkan teman tersebut agar tidak mengejek", "Memotret lalu memviralkan"], a: 2, exp: "Mencegah perbuatan buruk dan menghargai sesama manusia adalah bentuk penerapan norma yang tinggi." },
+                { q: "Tujuan akhir dari penerapan norma dalam kehidupan sehari-hari adalah membentuk pribadi yang...", options: ["Berkuasa", "Tertib, bertanggung jawab, dan menghargai orang lain", "Kaya dan terkenal", "Ditakuti orang"], a: 1, exp: "Norma membentuk karakter yang baik, bertanggung jawab, dan menghargai kehidupan bersama." },
+                { q: "Apa tujuan utama ditegakkannya norma hukum oleh negara?", options: ["Agar penjara cepat penuh", "Menciptakan keadilan, ketertiban, dan keamanan umum", "Mempersulit warga negara", "Sebagai pajangan saja"], a: 1, exp: "Hukum dibuat agar hak setiap warga terlindungi dan tercipta ketertiban umum." },
+                { q: "Sifat utama dari norma hukum jika dibandingkan norma lain adalah...", options: ["Boleh ditunda", "Hanya berupa imbauan", "Mengikat dan memaksa (ada alat penegak hukum)", "Tidak memiliki sanksi"], a: 2, exp: "Norma hukum sifatnya memaksa, wajib dipatuhi, dan ditegakkan oleh polisi/pengadilan." },
+                { q: "Norma yang sanksinya diyakini berupa dosa di akhirat adalah...", options: ["Norma Kesopanan", "Norma Hukum", "Norma Kesusilaan", "Norma Agama"], a: 3, exp: "Setiap agama mengajarkan adanya dosa sebagai konsekuensi atas pelanggaran perintah Tuhan." },
+                { q: "Jika seseorang ketahuan berbohong dan menipu teman-temannya di kelas, sanksi sosial yang didapat adalah...", options: ["Diberi piala", "Dipilih jadi ketua kelas", "Kehilangan kepercayaan dan dijauhi teman", "Dipenjara polisi"], a: 2, exp: "Berbohong melanggar norma kesusilaan dan kesopanan, akibatnya orang tersebut tidak lagi dipercaya." },
+                { q: "Mengapa kita harus tetap menerapkan norma kesopanan meskipun sedang berlibur di daerah lain?", options: ["Karena dipaksa", "Menghargai budaya setempat (Di mana bumi dipijak, di situ langit dijunjung)", "Agar diliput berita", "Supaya dianggap sok pintar"], a: 1, exp: "Menghormati adat istiadat setempat menjaga kerukunan antar suku bangsa di Indonesia." }
+            ]
+        };
+
+        const App = () => {
+            const [gameState, setGameState] = useState(GAME_STATES.WELCOME);
+            const [teams, setTeams] = useState(INITIAL_TEAMS);
+            
+            const [currentRoundIndex, setCurrentRoundIndex] = useState(0);
+            const [turnIndex, setTurnIndex] = useState(0);
+            
+            const [teamQuestions, setTeamQuestions] = useState({});
+            const [teamAnswers, setTeamAnswers] = useState({});
+            const [teamResults, setTeamResults] = useState({});
+            const [activePowerUps, setActivePowerUps] = useState({});
+            
+            const [timer, setTimer] = useState(0);
+            const [isTimerRunning, setIsTimerRunning] = useState(false);
+
+            useEffect(() => {
+                let interval = null;
+                if (isTimerRunning && timer > 0) {
+                    interval = setInterval(() => setTimer(t => t - 1), 1000);
+                } else if (timer === 0 && isTimerRunning) {
+                    setIsTimerRunning(false);
+                    // Force submit for teams that haven't answered when time's up
+                    teams.forEach(team => {
+                        if (teamAnswers[team.id] === undefined) {
+                            handleTeamAnswer(team.id, -1);
+                        }
+                    });
+                }
+                return () => clearInterval(interval);
+            }, [isTimerRunning, timer, teamAnswers, teams]);
+
+            const triggerConfetti = (originY = 0.6) => {
+                confetti({ particleCount: 150, spread: 100, origin: { y: originY }, colors: ['#fbbf24', '#f87171', '#60a5fa', '#34d399', '#c084fc'] });
+            };
+
+            const startRound = (rIdx) => {
+                setCurrentRoundIndex(rIdx);
+                setTurnIndex(0);
+                setGameState(GAME_STATES.ROUND_INTRO);
+            };
+
+            const startTurn = (turnIdx) => {
+                const round = ROUNDS[currentRoundIndex];
+                const allQs = QUESTIONS[round.id]; 
+                
+                // Mengambil 5 soal yang berbeda untuk setiap giliran agar tidak ada soal berulang
+                const startIndex = turnIdx * teams.length;
+                const turnQs = allQs.slice(startIndex, startIndex + teams.length);
+                
+                // Mengacak distribusi soal agar acak untuk masing-masing tim
+                const shuffledQs = [...turnQs].sort(() => Math.random() - 0.5);
+                
+                const mapping = {};
+                teams.forEach((t, i) => {
+                    mapping[t.id] = shuffledQs[i % shuffledQs.length];
+                });
+                
+                setTeamQuestions(mapping);
+                setTeamAnswers({});
+                setTeamResults({});
+                setActivePowerUps({});
+                
+                setTimer(round.time); 
+                setIsTimerRunning(true);
+                setTurnIndex(turnIdx);
+                setGameState(GAME_STATES.QUESTION);
+            };
+
+            const handleTeamAnswer = (teamId, optIndex) => {
+                setTeamAnswers(prevAns => {
+                    if (prevAns[teamId] !== undefined) return prevAns; // Prevent double answer
+
+                    const q = teamQuestions[teamId];
+                    const usedPU = activePowerUps[teamId];
+                    const round = ROUNDS[currentRoundIndex];
+
+                    let isCorrect = q ? (optIndex === q.a) : false;
+                    let savedByShield = false;
+
+                    if (!isCorrect && usedPU === 'SHIELD' && optIndex !== -1) {
+                        isCorrect = true;
+                        savedByShield = true;
+                    }
+
+                    // Record Result immediately
+                    setTeamResults(prevRes => ({ ...prevRes, [teamId]: { isCorrect, savedByShield } }));
+
+                    if (isCorrect) {
+                        let pointsGained = round.points;
+                        if (usedPU === '2X POINT') pointsGained *= 2;
+
+                        setTeams(prevTeams => prevTeams.map(t => {
+                            if (t.id === teamId) {
+                                let newBadges = [...t.badges];
+                                if (currentRoundIndex === 0 && !newBadges.includes(BADGES.QUICK_THINKER.icon)) newBadges.push(BADGES.QUICK_THINKER.icon);
+                                if (currentRoundIndex === 1 && !newBadges.includes(BADGES.GUARDIAN.icon)) newBadges.push(BADGES.GUARDIAN.icon);
+                                if (currentRoundIndex === 2 && !newBadges.includes(BADGES.DETECTIVE.icon)) newBadges.push(BADGES.DETECTIVE.icon);
+                                return { ...t, score: t.score + pointsGained, badges: newBadges };
+                            }
+                            return t;
+                        }));
+                        
+                        if(optIndex !== -1) {
+                            setTimeout(() => { confetti({ particleCount: 40, spread: 50, origin: { y: 0.8 }, colors: ['#34d399', '#fbbf24'] }); }, 100);
+                        }
+                    }
+                    
+                    return { ...prevAns, [teamId]: optIndex };
+                });
+            };
+
+            const usePowerUp = (teamId) => {
+                const team = teams.find(t => t.id === teamId);
+                if (team.puUsed || activePowerUps[teamId]) return;
+
+                setTeams(prev => prev.map(t => t.id === teamId ? { ...t, puUsed: true } : t));
+                setActivePowerUps(prev => ({ ...prev, [teamId]: team.powerUp }));
+
+                if (team.powerUp === 'EXTRA TIME') {
+                    setTimer(t => t + 10);
+                }
+            };
+
+            const proceedToNextTurn = () => {
+                const round = ROUNDS[currentRoundIndex];
+                const maxTurns = Math.floor(QUESTIONS[round.id].length / teams.length);
+                
+                if (turnIndex + 1 < maxTurns) { 
+                    startTurn(turnIndex + 1);
+                } else {
+                    setGameState(GAME_STATES.INTERMEZZO);
+                }
+            };
+
+            const WelcomeScreen = () => (
+                <div className="flex-1 flex flex-col items-center justify-center text-center p-8 relative overflow-hidden bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]">
+                    <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/90 to-slate-900/90 z-0"></div>
+                    <div className="relative z-10 animate-fade-in flex flex-col items-center">
+                        <div className="text-8xl mb-6 drop-shadow-[0_0_30px_rgba(251,191,36,0.8)]">🏆</div>
+                        <h2 className="text-3xl text-yellow-400 font-bold tracking-widest mb-2 uppercase">Class of Champions</h2>
+                        <h1 className="text-7xl font-black mb-6 text-transparent bg-clip-text bg-gradient-to-r from-white to-blue-200 drop-shadow-xl">NORMA CHALLENGE</h1>
+                        <p className="text-2xl text-blue-200 mb-12 italic font-light">"Siapa yang paling memahami norma?"</p>
+                        
+                        <div className="flex gap-6 mb-12">
+                            {teams.map(t => (
+                                <div key={t.id} className={`${t.color} w-20 h-20 rounded-2xl flex items-center justify-center text-4xl shadow-xl transform rotate-3 hover:scale-110 transition-transform border-2 border-white/20`}>
+                                    {t.icon}
+                                </div>
+                            ))}
+                        </div>
+
+                        <button onClick={() => setGameState(GAME_STATES.RULES)} className="group relative px-12 py-5 bg-gradient-to-r from-yellow-500 to-orange-500 rounded-full font-black text-2xl shadow-[0_0_40px_rgba(245,158,11,0.6)] hover:scale-105 transition-all text-white overflow-hidden">
+                            <span className="relative z-10">🚀 MULAI KOMPETISI</span>
+                            <div className="absolute inset-0 h-full w-full bg-gradient-to-r from-orange-500 to-yellow-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                        </button>
+                    </div>
+                </div>
+            );
+
+            const RulesScreen = () => (
+                <div className="flex-1 flex flex-col p-8 justify-center max-w-6xl mx-auto animate-fade-in relative z-10">
+                    <h2 className="text-5xl font-black text-center mb-10 text-yellow-400 drop-shadow-md">📜 ATURAN MAIN</h2>
+                    <div className="grid grid-cols-2 gap-6 mb-10 text-lg">
+                        <div className="glass-panel p-6 rounded-2xl border-l-4 border-yellow-400">
+                            <ul className="space-y-4">
+                                <li className="flex items-center gap-3"><span>👥</span> Kelas dibagi menjadi 5 tim yang akan bertanding.</li>
+                                <li className="flex items-center gap-3"><span>📱</span> 5 Soal akan muncul <b>bersamaan</b> untuk 5 tim.</li>
+                                <li className="flex items-center gap-3"><span>⏱️</span> Diskusikan dan pilih jawaban sebelum waktu habis.</li>
+                                <li className="flex items-center gap-3"><span>⚡</span> Jawaban yang diklik akan <b>langsung memunculkan hasil</b>.</li>
+                            </ul>
+                        </div>
+                        <div className="glass-panel p-6 rounded-2xl border-l-4 border-green-400">
+                            <ul className="space-y-4">
+                                <li className="flex items-center gap-3"><span>✅</span> Jawaban benar = Tambahan Poin. Salah = Tidak dikurangi.</li>
+                                <li className="flex items-center gap-3"><span>🚀</span> Gunakan POWER-UP yang dimiliki timmu!</li>
+                                <li className="flex items-center gap-3"><span>🤝</span> Bermainlah dengan sportif dan hargai teman.</li>
+                                <li className="flex items-center gap-3"><span>🏆</span> Skor tertinggi menjadi CLASS CHAMPION!</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div className="text-center">
+                        <button onClick={() => setGameState(GAME_STATES.ROUND_INTRO)} className="px-12 py-4 bg-green-500 hover:bg-green-400 rounded-full font-black text-2xl shadow-lg hover:scale-105 transition-transform text-white border-2 border-white/20 btn-pulse">
+                            SIAP! MULAI 🎮
+                        </button>
+                    </div>
+                </div>
+            );
+
+            const RoundIntroScreen = () => {
+                const round = ROUNDS[currentRoundIndex];
+                return (
+                    <div className="flex-1 flex flex-col items-center justify-center text-center p-8 animate-fade-in relative z-10">
+                        <div className="text-6xl mb-6">⚡</div>
+                        <h2 className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400 mb-4 drop-shadow-lg">{round.title}</h2>
+                        <p className="text-3xl text-gray-300 mb-8">{round.desc}</p>
+                        <div className="glass-panel px-10 py-6 rounded-3xl mb-12 flex gap-8 items-center border-t border-white/20">
+                            <div><span className="text-yellow-400 font-bold block text-xl">NILAI</span><span className="text-4xl font-black">+{round.points} POIN</span></div>
+                            <div className="h-16 w-px bg-white/20"></div>
+                            <div><span className="text-blue-400 font-bold block text-xl">WAKTU</span><span className="text-4xl font-black">⏱️ {round.time} DETIK</span></div>
+                        </div>
+                        <button onClick={() => startTurn(0)} className="px-10 py-5 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full font-black text-2xl shadow-[0_0_30px_rgba(79,70,229,0.5)] hover:scale-110 transition-all text-white btn-pulse border-2 border-white/20">
+                            TAMPILKAN 5 SOAL BERSAMAAN 🚀
+                        </button>
+                    </div>
+                );
+            };
+
+            const QuestionScreen = () => {
+                const round = ROUNDS[currentRoundIndex];
+                const isAllAnswered = teams.every(t => teamAnswers[t.id] !== undefined);
+                const maxTurns = Math.floor(QUESTIONS[round.id].length / teams.length);
+
+                return (
+                    <div className="flex-1 flex flex-col p-4 relative h-full bg-[url('https://www.transparenttextures.com/patterns/stardust.png')]">
+                        
+                        {/* Header Status & Master Timer */}
+                        <div className="flex justify-between items-center mb-3 bg-slate-900/90 p-3 rounded-2xl border border-indigo-500/50 shadow-xl z-10">
+                            <div className="flex items-center gap-4">
+                                <div className="bg-indigo-600 px-6 py-2 rounded-full font-bold text-white shadow-lg flex items-center gap-2">
+                                    <span className="text-xl">📺</span> {round.title} (Bagian {turnIndex + 1}/{maxTurns})
+                                </div>
+                                <button onClick={() => setIsTimerRunning(!isTimerRunning)} className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-full text-xs font-bold shadow-md">
+                                    {isTimerRunning ? '⏸ PAUSE TIMER' : '▶ PLAY TIMER'}
+                                </button>
+                            </div>
+                            
+                            <div className={`text-4xl font-black flex items-center gap-3 ${timer <= 5 ? 'text-red-500 animate-pulse' : 'text-yellow-400'}`}>
+                                ⏱️ {timer} <span className="text-sm font-normal text-slate-400 mt-2">Detik</span>
+                            </div>
+                        </div>
+
+                        {/* 5 Screens Grid */}
+                        <div className="flex-1 grid grid-cols-1 md:grid-cols-5 gap-3 overflow-hidden pb-4 relative z-10">
+                            {teams.map(team => {
+                                const q = teamQuestions[team.id];
+                                const ans = teamAnswers[team.id];
+                                const res = teamResults[team.id];
+                                const isHintActive = activePowerUps[team.id] === 'HINT';
+                                
+                                let hiddenOptionIdx = -1;
+                                if (isHintActive && q) {
+                                    hiddenOptionIdx = q.options.findIndex((_, idx) => idx !== q.a);
+                                }
+
+                                if (!q) return <div key={team.id} className="bg-slate-800 rounded-2xl animate-pulse"></div>;
+
+                                // --- HASIL JAWABAN (TAMPIL LANGSUNG JIKA SUDAH MENJAWAB) ---
+                                if (ans !== undefined && res) {
+                                    return (
+                                        <div key={team.id} className={`flex flex-col p-4 rounded-2xl border-4 shadow-xl ${res.isCorrect ? 'bg-emerald-900/80 border-emerald-500' : 'bg-rose-900/80 border-rose-500'} h-full transition-all duration-500 overflow-hidden relative`}>
+                                            <div className="flex justify-between items-center mb-2 bg-black/30 p-2 rounded-lg">
+                                                <h3 className={`font-black text-lg ${team.text} flex items-center gap-2`}><span className="text-2xl">{team.icon}</span> {team.name}</h3>
+                                                <span className="text-xs font-bold bg-black/50 px-2 py-1 rounded text-white">{team.score} Pts</span>
+                                            </div>
+                                            
+                                            <div className="text-center mb-2 border-b border-white/10 pb-2">
+                                                <div className="text-5xl mb-1 animate-bounce">{res.isCorrect ? '🎉' : '❌'}</div>
+                                                <h3 className="font-black text-2xl text-white">{res.isCorrect ? 'BENAR!' : 'BELUM TEPAT'}</h3>
+                                                {res.savedByShield && <div className="text-xs bg-blue-600 text-white py-1 px-2 rounded-full mt-1 inline-block animate-pulse font-bold border border-blue-400">🛡️ SHIELD AKTIF!</div>}
+                                            </div>
+                                            
+                                            <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar text-sm mt-2">
+                                                <div className="mb-2 bg-black/40 p-2 rounded">
+                                                    <span className="block text-slate-400 text-xs font-bold mb-1">Pilihan Tim:</span>
+                                                    <span className={`font-bold ${res.isCorrect ? 'text-green-300' : 'text-red-300'}`}>
+                                                        {ans === -1 ? 'Waktu Habis / Kosong' : q.options[ans]}
+                                                    </span>
+                                                </div>
+                                                {!res.isCorrect && (
+                                                    <div className="mb-2 bg-green-900/60 p-2 rounded border border-green-500/50">
+                                                        <span className="block text-green-400 text-xs font-bold mb-1">Jawaban Benar:</span>
+                                                        <span className="font-bold text-green-300">{q.options[q.a]}</span>
+                                                    </div>
+                                                )}
+                                                
+                                                <div className="bg-slate-900/90 p-3 rounded-lg border-l-2 border-indigo-400 shadow-inner mt-2 text-xs leading-relaxed">
+                                                    <span className="block text-indigo-300 font-bold mb-1">💡 Penjelasan:</span>
+                                                    <span className="text-slate-200">{q.exp}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )
+                                }
+
+                                // --- PANEL PERTANYAAN (JIKA BELUM MENJAWAB) ---
+                                return (
+                                    <div key={team.id} className={`flex flex-col p-4 rounded-2xl border-t-4 shadow-xl bg-slate-800/90 ${team.color.replace('bg-', 'border-')} h-full flex flex-col relative`}>
+                                        <div className="flex justify-between items-center mb-3 bg-black/20 p-2 rounded-lg">
+                                            <h3 className={`font-black text-lg ${team.text} flex items-center gap-2`}>
+                                                <span className="text-2xl">{team.icon}</span> {team.name}
+                                            </h3>
+                                            <span className="text-xs font-bold text-slate-400">{team.score} Pts</span>
+                                        </div>
+
+                                        {/* PowerUp Button */}
+                                        {!team.puUsed && !activePowerUps[team.id] && (
+                                            <button onClick={() => usePowerUp(team.id)} 
+                                                    className="mb-3 w-full py-2 bg-gradient-to-r from-yellow-500 to-orange-500 text-white rounded-lg text-xs font-bold shadow-md transform hover:scale-105 active:scale-95 transition-all flex justify-center items-center gap-1">
+                                                ⚡ GUNAKAN {team.powerUp}
+                                            </button>
+                                        )}
+                                        {activePowerUps[team.id] && (
+                                            <div className="mb-3 w-full py-2 bg-green-500/20 border border-green-500 text-green-300 text-center rounded-lg text-xs font-bold flex justify-center items-center gap-1 animate-pulse">
+                                                ⚡ {activePowerUps[team.id]} AKTIF
+                                            </div>
+                                        )}
+
+                                        <div className="flex-1 overflow-y-auto mb-2 custom-scrollbar">
+                                            <p className="text-sm font-medium leading-relaxed text-indigo-50">{q.q}</p>
+                                        </div>
+                                        
+                                        <div className="flex flex-col gap-2 mt-auto">
+                                            {q.options.map((opt, idx) => {
+                                                if (idx === hiddenOptionIdx) return null; 
+                                                return (
+                                                    <button 
+                                                        key={idx}
+                                                        onClick={() => handleTeamAnswer(team.id, idx)}
+                                                        className={`text-left text-xs p-3 rounded-xl border-2 transition-all duration-200 bg-slate-700/50 border-slate-600 hover:bg-slate-500 hover:border-blue-400 active:scale-95 flex items-start`}
+                                                    >
+                                                        <span className="font-bold mr-2 text-indigo-300">{String.fromCharCode(65 + idx)}.</span> 
+                                                        <span className="flex-1">{opt}</span>
+                                                    </button>
+                                                )
+                                            })}
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+
+                        {/* Tombol Lanjut (Hanya muncul kalau semua tim selesai menjawab) */}
+                        {isAllAnswered && (
+                            <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-30 animate-fade-in">
+                                <button onClick={proceedToNextTurn} className="px-12 py-4 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 rounded-full font-black text-2xl shadow-[0_0_50px_rgba(16,185,129,1)] hover:scale-110 transition-transform text-white border-4 border-white/30 btn-pulse whitespace-nowrap">
+                                    {turnIndex + 1 < maxTurns ? '⏭ LANJUT KE SOAL BERIKUTNYA' : '📊 AKHIRI RONDE & LIHAT SKOR'}
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                );
+            };
+
+            const IntermezzoScreen = () => (
+                <div className="flex-1 flex flex-col items-center justify-center p-8 animate-fade-in relative z-10 text-center">
+                    <h2 className="text-5xl font-black text-yellow-400 mb-2">📊 CURRENT RANKING</h2>
+                    <p className="text-xl text-blue-200 mb-10 italic">"Siapa yang memimpin saat ini?"</p>
+                    
+                    <div className="flex items-end justify-center gap-6 h-64 mb-12">
+                        {[...teams].sort((a,b) => b.score - a.score).slice(0,3).map((t, i) => {
+                            const heights = ['h-64', 'h-48', 'h-36'];
+                            const medals = ['🥇', '🥈', '🥉'];
+                            return (
+                                <div key={t.id} className="flex flex-col items-center animate-fade-in" style={{ animationDelay: `${i * 200}ms` }}>
+                                    <div className="text-4xl mb-2">{medals[i]}</div>
+                                    <div className={`w-32 ${heights[i]} ${t.color} rounded-t-xl flex flex-col items-center justify-start pt-4 shadow-[0_-10px_20px_rgba(0,0,0,0.3)] border-t-2 border-white/20`}>
+                                        <span className="text-3xl mb-1">{t.icon}</span>
+                                        <span className="font-black text-lg">{t.name}</span>
+                                        <span className="font-bold text-2xl mt-auto pb-4">{t.score}</span>
+                                    </div>
+                                </div>
+                            )
+                        })}
+                    </div>
+                    
+                    <h3 className="text-2xl font-bold text-orange-400 mb-8 animate-pulse">🔥 "Pertandingan masih terbuka! Terus kumpulkan poin!"</h3>
+                    
+                    <div className="flex gap-4">
+                        <button onClick={() => setGameState(GAME_STATES.SCOREBOARD)} className="px-8 py-3 bg-slate-700 hover:bg-slate-600 rounded-full font-bold">DETAIL SKOR</button>
+                        <button onClick={() => {
+                            if (currentRoundIndex < ROUNDS.length - 1) {
+                                startRound(currentRoundIndex + 1);
+                            } else {
+                                setGameState(GAME_STATES.FINAL_BOARD);
+                                triggerConfetti();
+                            }
+                        }} className="px-10 py-3 bg-blue-600 hover:bg-blue-500 rounded-full font-bold text-xl shadow-[0_0_15px_rgba(37,99,235,0.6)] border border-blue-400">
+                            {currentRoundIndex < ROUNDS.length - 1 ? 'RONDE SELANJUTNYA ⏭' : 'LIHAT HASIL AKHIR 🏆'}
+                        </button>
+                    </div>
+                </div>
+            );
+
+            const ScoreboardScreen = () => (
+                <div className="flex-1 p-8 flex flex-col max-w-5xl mx-auto w-full animate-fade-in relative z-10">
+                    <div className="flex justify-between items-center mb-8">
+                        <h2 className="text-4xl font-black text-yellow-400">📊 LIVE SCOREBOARD</h2>
+                        <button onClick={() => setGameState(currentRoundIndex === ROUNDS.length - 1 && turnIndex === Math.floor(QUESTIONS[ROUNDS[currentRoundIndex].id].length / teams.length) - 1 ? GAME_STATES.FINAL_BOARD : GAME_STATES.INTERMEZZO)} className="px-6 py-2 bg-slate-700 hover:bg-slate-600 rounded-full font-bold">KEMBALI</button>
+                    </div>
+                    
+                    <div className="glass-panel rounded-2xl overflow-hidden border border-slate-600 shadow-2xl flex-1">
+                        <table className="w-full text-left">
+                            <thead className="bg-slate-800 text-slate-300">
+                                <tr>
+                                    <th className="p-4 text-center">RANK</th>
+                                    <th className="p-4">TIM</th>
+                                    <th className="p-4 text-right">SKOR</th>
+                                    <th className="p-4">BADGES</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {[...teams].sort((a,b) => b.score - a.score).map((t, i) => (
+                                    <tr key={t.id} className="border-b border-slate-700 hover:bg-slate-700/50 transition-colors">
+                                        <td className="p-4 text-center font-black text-2xl text-slate-400">
+                                            {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i+1}️⃣`}
+                                        </td>
+                                        <td className="p-4 font-bold text-xl flex items-center gap-3">
+                                            <div className={`w-10 h-10 rounded flex items-center justify-center text-xl ${t.color}`}>{t.icon}</div>
+                                            <span className={t.text}>{t.name}</span>
+                                        </td>
+                                        <td className="p-4 text-right font-black text-3xl text-yellow-400">{t.score}</td>
+                                        <td className="p-4">
+                                            <div className="flex gap-1 flex-wrap">
+                                                {t.badges.map((b, idx) => <span key={idx} className="text-xl bg-slate-800 p-1 rounded" title="Badge">{b}</span>)}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            );
+
+            const FinalBoardScreen = () => {
+                const sorted = [...teams].sort((a,b) => b.score - a.score);
+                const champion = sorted[0];
+
+                return (
+                    <div className="flex-1 flex flex-col items-center justify-center p-8 animate-fade-in text-center relative z-10">
+                        <h2 className="text-5xl font-black text-white mb-2 drop-shadow-lg">🎊 FINAL SCOREBOARD 🎊</h2>
+                        <p className="text-2xl text-blue-300 mb-10 italic">"Dan pemenangnya adalah..."</p>
+                        
+                        <div className="glass-panel p-8 rounded-3xl w-full max-w-4xl border-2 border-yellow-500/50 shadow-[0_0_50px_rgba(234,179,8,0.2)] mb-8 bg-gradient-to-b from-slate-800 to-slate-900">
+                             {[...teams].sort((a,b) => b.score - a.score).map((t, i) => (
+                                 <div key={t.id} className={`flex items-center justify-between p-4 mb-3 rounded-xl ${i===0 ? 'bg-gradient-to-r from-yellow-600/40 to-yellow-900/40 border border-yellow-500' : 'bg-slate-800'}`}>
+                                     <div className="flex items-center gap-4">
+                                        <span className="text-4xl">{i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : ''}</span>
+                                        <div className={`w-12 h-12 rounded-lg flex items-center justify-center text-2xl ${t.color}`}>{t.icon}</div>
+                                        <span className={`font-black text-2xl ${i===0 ? 'text-yellow-400' : 'text-white'}`}>{t.name}</span>
+                                     </div>
+                                     <div className="flex items-center gap-6">
+                                         <div className="flex text-xl bg-black/30 px-2 py-1 rounded gap-1">
+                                             {t.badges.map((b, idx) => <span key={idx}>{b}</span>)}
+                                         </div>
+                                         <span className={`font-black text-4xl ${i===0 ? 'text-yellow-400' : 'text-slate-300'}`}>{t.score} Pts</span>
+                                     </div>
+                                 </div>
+                             ))}
+                        </div>
+
+                        <button onClick={() => { setGameState(GAME_STATES.CEREMONY); triggerConfetti(0.3); triggerConfetti(0.5); }} className="px-14 py-5 bg-gradient-to-r from-yellow-500 to-orange-500 rounded-full font-black text-3xl shadow-[0_0_40px_rgba(245,158,11,0.8)] hover:scale-110 transition-transform text-white border-2 border-white/50 btn-pulse">
+                            MAHKOTAI SANG JUARA 👑
+                        </button>
+                    </div>
+                )
+            };
+
+            const CeremonyScreen = () => {
+                const champion = [...teams].sort((a,b) => b.score - a.score)[0];
+                return (
+                    <div className="flex-1 flex flex-col items-center justify-center p-8 animate-fade-in text-center relative z-10 overflow-hidden">
+                        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-20"></div>
+                        
+                        <h2 className="text-3xl text-yellow-400 font-bold tracking-widest mb-2 uppercase drop-shadow-md relative z-10">CLASS OF CHAMPIONS</h2>
+                        <h1 className="text-7xl font-black mb-10 text-transparent bg-clip-text bg-gradient-to-r from-white to-blue-200 drop-shadow-2xl relative z-10">NORMA CHAMPION</h1>
+                        
+                        <div className="relative z-10 mb-12">
+                            <div className="absolute inset-0 bg-yellow-500 blur-[100px] opacity-40 rounded-full"></div>
+                            <div className="text-9xl mb-4 animate-bounce">🏆</div>
+                            <div className={`${champion.color} px-12 py-6 rounded-3xl border-4 border-yellow-400 shadow-[0_0_50px_rgba(250,204,21,0.6)]`}>
+                                <div className="text-5xl mb-2">{champion.icon}</div>
+                                <h3 className="text-5xl font-black text-white mb-2">{champion.name}</h3>
+                                <p className="text-yellow-300 font-bold text-2xl mb-4">TOTAL SCORE: {champion.score} POINTS</p>
+                                <div className="flex justify-center gap-2 text-3xl bg-black/20 p-3 rounded-xl inline-flex">
+                                    {champion.badges.map((b, idx) => <span key={idx}>{b}</span>)}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="glass-panel p-6 rounded-2xl max-w-3xl relative z-10 mb-8 border-l-4 border-blue-400">
+                            <p className="text-xl leading-relaxed text-blue-100">
+                                "Selamat! Kalian telah membuktikan bahwa memahami norma berarti belajar menjadi pribadi yang tertib, bertanggung jawab, menghargai orang lain, dan mampu menerapkan aturan dalam kehidupan sehari-hari."
+                            </p>
+                        </div>
+                        
+                        <button onClick={() => window.location.reload()} className="relative z-10 text-sm text-slate-400 hover:text-white underline">Mainkan Ulang Game</button>
+                    </div>
+                )
+            };
+
+            return (
+                <div className="w-full h-full flex flex-col font-sans text-white relative">
+                    <div className="absolute inset-0 bg-slate-900 z-0"></div>
+                    <div className="absolute inset-0 bg-gradient-to-b from-indigo-900/40 to-slate-900/80 z-0"></div>
+                    
+                    {/* Top Navbar */}
+                    <div className="h-16 glass-panel border-b border-white/10 flex items-center justify-between px-6 relative z-20 shrink-0">
+                        <div className="flex items-center gap-3">
+                            <span className="text-2xl">🏆</span>
+                            <h1 className="font-bold text-xl tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-400">CLASS OF CHAMPIONS</h1>
+                        </div>
+                        <div className="flex gap-4">
+                            {teams.map(t => (
+                                <div key={t.id} className="flex items-center gap-2 bg-slate-800/80 px-3 py-1 rounded-full border border-slate-700 shadow-inner">
+                                    <span>{t.icon}</span>
+                                    <span className="font-bold text-sm text-slate-300">{t.score}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Main Content Area */}
+                    <div className="flex-1 relative overflow-hidden flex">
+                        {gameState === GAME_STATES.WELCOME && <WelcomeScreen />}
+                        {gameState === GAME_STATES.RULES && <RulesScreen />}
+                        {gameState === GAME_STATES.ROUND_INTRO && <RoundIntroScreen />}
+                        {gameState === GAME_STATES.QUESTION && <QuestionScreen />}
+                        {gameState === GAME_STATES.INTERMEZZO && <IntermezzoScreen />}
+                        {gameState === GAME_STATES.SCOREBOARD && <ScoreboardScreen />}
+                        {gameState === GAME_STATES.FINAL_BOARD && <FinalBoardScreen />}
+                        {gameState === GAME_STATES.CEREMONY && <CeremonyScreen />}
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
